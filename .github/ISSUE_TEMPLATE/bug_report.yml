@@ -1,0 +1,151 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in bc-scaffold
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please provide as much detail as possible to help us identify and fix the issue.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When I run bc-scaffold with..., I expect... but instead...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the behavior.
+      placeholder: |
+        1. Run command '...'
+        2. Select option '...'
+        3. See error
+      value: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: I expected the script to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: Instead, the script...
+    validations:
+      required: true
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error Output
+      description: If applicable, paste any error messages or relevant output.
+      placeholder: Paste error messages here...
+      render: shell
+    validations:
+      required: false
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this bug?
+      options:
+        - Low - Minor issue, workaround available
+        - Medium - Impacts functionality but not critical
+        - High - Blocks important functionality
+        - Critical - System unusable or data loss
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: bc-scaffold Version
+      description: What version of bc-scaffold are you using? (run `./bc-scaffold --version`)
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating System
+      description: What OS are you running bc-scaffold on?
+      options:
+        - Linux
+        - macOS
+        - Windows (WSL)
+        - Windows (Git Bash)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: bash-version
+    attributes:
+      label: Bash Version
+      description: What version of bash are you using? (run `bash --version`)
+      placeholder: "GNU bash, version 5.0.17"
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Any other relevant environment information (shell, terminal, etc.)
+      placeholder: Using zsh in iTerm2...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: affected-area
+    attributes:
+      label: Affected Area
+      description: Which areas of bc-scaffold are affected? (select all that apply)
+      options:
+        - label: Template Management
+        - label: CLI Interface
+        - label: Quality Templates
+        - label: CI Templates
+        - label: CD Templates
+        - label: Trivy Templates
+        - label: Help/Documentation
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here (screenshots, logs, etc.)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to ensure this bug hasn't been reported
+          required: true
+        - label: I have included all relevant information to reproduce the bug
+          required: true

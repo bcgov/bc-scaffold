@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or Discussion
+    url: https://github.com/bcgov/bc-scaffold/discussions
+    about: Ask questions or discuss ideas with the community
+  - name: BC Government Developer Resources
+    url: https://developer.gov.bc.ca/
+    about: General BC Government developer resources and guidelines
