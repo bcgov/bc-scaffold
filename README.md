@@ -4,7 +4,7 @@
 > These tools are in the early stages and are a work in progress.
 
 > [!WARNING]
-> We have a running naming issue, the term `Agent/agent` such as and in the `/security-remediation-agent/src/agents/***_agent.py` are too loosely utitlized.
+> The repo has a running naming issue, the term `Agent/agent` such as and in the `/security-remediation-agent/src/agents/***_agent.py` are too loosely utitlized.
 > These artifacts are better termed LangChain workflows invoking tools and being AI ready but not remotely an agent in the AI agentic sense.
 >
 > A future enhancement will clean up this misnomer and tighten the definitions within the code base and the documentation.
