@@ -3,6 +3,14 @@
 > [!NOTE]
 > These tools are in the early stages and are a work in progress.
 
+> [!WARNING]
+> The repo has a running naming issue, the term `Agent/agent` such as and in the `/security-remediation-agent/src/agents/***_agent.py` are too loosely utitlized.
+> These artifacts are better termed LangChain workflows invoking tools and being AI ready but not remotely an agent in the AI agentic sense.
+>
+> A future enhancement will clean up this misnomer and tighten the definitions within the code base and the documentation.
+>
+> So we ask the reader to please trust the stressed point below of this solution as not being agentic in nature. As the maintainers respect the ministries concerns.
+
 The purpose of this project is to provide a reusable set of automation tools for managing Security and Vulnerability Remediation within your project.
 
 ## Design Goal
