@@ -41,6 +41,151 @@ The workflows and actions then use deterministic processes to scan the results a
 
 At this stage the rollup PRs are drafts containing the instructions and details needed for a human or agent to fill in the implementation.  Since cloud agents are unavailable in the BCGov orgs (for good reasons mentioned above) the PRs can not be directly assigned to an agent in the main repo.  A developer would have to fork the repo into an org that allows cloud agents or run the agent processes locally in their development environment.  Since this violates the primary design goal (low effort) the team is investigating ways to replace the argentic requirement with additional deterministic tooling to enable complete remediation PRs to be presented without agent evolvement.
 
+### High Level Workflows
+
+#### Dependency Graph
+
+```mermaid
+flowchart LR
+  trigger["Triggered or Scheduled
+  Run"]
+
+  scan["Deterministically
+  Scan Project Dependencies"]
+
+  report["Generate Complete
+  SBOM"]
+
+  publish["Publish to Repository
+  Insights - Dependency graph"]
+
+  trigger --> scan
+  scan --> report
+  report --> publish
+```
+
+#### Vulnerability and Quality
+
+```mermaid
+flowchart LR
+  trigger["Triggered or Scheduled
+  Run"]
+
+  quality["Code Quality
+  Scans"]
+
+  security["Security
+  Scans"]
+
+  vulnerability["Vulnerability
+  Scans"]
+
+  report["Generate SARIF
+  Reports"]
+
+  publish["Publish to Repository
+  Advanced Security"]
+
+  trigger --> quality
+  trigger --> security
+  trigger --> vulnerability
+
+  quality --> report
+  security --> report
+  vulnerability --> report
+
+  report --> publish
+```
+
+#### Remediation - Current State
+
+```mermaid
+flowchart LR
+  trigger["Triggered or Scheduled
+  Run"]
+
+  scan["Deterministically
+  Review Open GitHub Advanced Security Reports"]
+
+  plan["Deterministically
+  Plan the remediation"]
+
+  issues["Open Remediation Issues
+
+  Issues are grouped by severity
+  (Low, Medium, High, Critical)
+  and detail the remediation plan
+  separating breaking
+  and non-breaking changes"]
+
+  pr-non-breaking["Open Draft PR
+  for All non-Breaking Changes
+
+  Linked from the related issue
+  containing the instructions required
+  for an agent or human to implement."]
+
+  pr-breaking["Open Draft PR
+  for All Breaking Changes
+
+  Linked from the related issue
+  containing the instructions required
+  for an agent or human to implement."]
+
+  trigger --> scan
+  scan --> plan
+
+  plan --> issues
+
+  issues --> pr-non-breaking
+  issues --> pr-breaking
+```
+
+#### Remediation - Future State
+
+```mermaid
+flowchart LR
+  trigger["Triggered or Scheduled
+  Run"]
+
+  scan["Deterministically
+  Review Open GitHub Advanced Security Reports"]
+
+  plan["Deterministically
+  Plan the remediation"]
+
+  issues["Open Remediation Issues
+
+  Issues are grouped by severity
+  (Low, Medium, High, Critical)
+  and detail the remediation plan
+  separating breaking
+  and non-breaking changes"]
+
+  implement["Deterministically
+  Implement the Plan"]
+
+  pr-non-breaking["Open PR
+  for All non-Breaking Changes
+
+  Implemented and ready for review."]
+
+  pr-breaking["Open PR
+  for All Breaking Changes
+
+  Implemented and ready for review."]
+
+  trigger --> scan
+  scan --> plan
+
+  plan --> issues
+
+  issues --> implement
+
+  implement --> pr-non-breaking
+  implement --> pr-breaking
+```
+
 ## Design Documentation
 
 - [Security Remediation Agent Design](./docs/workflows/security-remediation-agent-design.md)
