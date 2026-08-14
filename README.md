@@ -20,6 +20,7 @@ Enable small teams with small budgets to effectively manage security and vulnera
 ## Key Features
 
 - Enable early detection of security and vulnerability issues.  Enabling teams to actively identify and address issues as they arise.
+- Support volume security and vulnerability remediation in existing repos in a manageable way.
 - Enable workflows to be gated on the presence or absence of security and vulnerability issues.
 - Reusability.
 - Easily integrated into any project.
