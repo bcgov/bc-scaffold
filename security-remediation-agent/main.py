@@ -1,16 +1,22 @@
 import argparse
 import asyncio
 import json
+import logging
+import os
 import sys
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
+from src.agents.artifact_collector_agent import ArtifactCollectorAgent
 from src.agents.remediation_planner_agent import RemediationPlannerAgent
 from src.agents.vulnerability_collector_agent import VulnerabilityCollectorAgent
 from src.agents.vulnerability_triage_agent import VulnerabilityTriageAgent
+from src.config.security_remediation_config import ConfigError, SecurityRemediationConfig
+from src.models.security_remediation_cache import SecurityRemediationCache
 from src.orchestrator.security_orchestrator import SecurityOrchestrator
+from src.tools.ecosystem_manifest_tool import ManifestTool
 
 
 def to_jsonable(value: Any) -> Any:
@@ -31,23 +37,81 @@ def to_jsonable(value: Any) -> Any:
     return value
 
 
+def configure_logging() -> None:
+    """Configure stderr logging; set LOG_LEVEL to DEBUG for verbose diagnostics."""
+    configured_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = logging.getLevelName(configured_level)
+    if not isinstance(log_level, int):
+        raise ValueError(
+            f"Invalid LOG_LEVEL {configured_level!r}; use DEBUG, INFO, WARNING, ERROR, or CRITICAL."
+        )
+
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,
+        stream=sys.stderr,
+    )
+    def request_log_filter(record: logging.LogRecord) -> bool:
+        if record.name == "httpx" and record.levelno == logging.INFO:
+            record.levelno = logging.DEBUG
+            record.levelname = "DEBUG"
+        return record.levelno >= log_level
+
+    logging.getLogger("httpx").setLevel(log_level)
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(request_log_filter)
+    logging.getLogger(__name__).info("Logging configured at %s level", configured_level)
+
+
 async def async_main() -> None:
+    configure_logging()
+
     parser = argparse.ArgumentParser(description="Run security remediation orchestration.")
-    parser.add_argument("--owner", required=True, help="Repository owner or organization.")
-    parser.add_argument("--repo",  required=True, help="Repository name.")
+    parser.add_argument("--owner", help="Repository owner or organization (default: GITHUB_REPOSITORY).")
+    parser.add_argument("--repo", help="Repository name or full GitHub URL (default: GITHUB_REPOSITORY).")
+    parser.add_argument("--ref", help="Repository branch or tag (env: SECURITY_REMEDIATION_REF).")
+    parser.add_argument("--ecosystems", help="Comma-separated ecosystems (env: SECURITY_REMEDIATION_ECOSYSTEMS).")
+    parser.add_argument("--verification-enabled", choices=["true", "false"],
+                        help="Verify proposed upgrades (env: SECURITY_REMEDIATION_VERIFICATION_ENABLED).")
+    parser.add_argument("--additional-updates", choices=["true", "false"],
+                        help="Also plan non-vulnerable updates (env: SECURITY_REMEDIATION_ADDITIONAL_UPDATES).")
+    parser.add_argument("--artifact-output", choices=["true", "false"],
+                        help="Write remediation-plan.json and renovate.json5 (env: SECURITY_REMEDIATION_ARTIFACT_OUTPUT).")
     args = parser.parse_args(normalize_duplicated_invocation(sys.argv[1:]))
 
-    repo = {"owner": args.owner, "name": args.repo}
+    try:
+        config = SecurityRemediationConfig.load(
+            owner=args.owner,
+            repo=args.repo,
+            ecosystems=args.ecosystems,
+            ref=args.ref,
+            verification_enabled=args.verification_enabled,
+            additional_updates=args.additional_updates,
+            artifact_output=args.artifact_output,
+        )
+    except ConfigError as exc:
+        raise SystemExit(str(exc)) from exc
 
+    repo = config.repository
+
+    # One ManifestTool (and cache) shared by every stage of the run.
+    manifest_tool = ManifestTool(cache=SecurityRemediationCache())
     orchestrator = SecurityOrchestrator(
         VulnerabilityCollectorAgent(),
-        VulnerabilityTriageAgent(),
-        RemediationPlannerAgent(),
-        reviewer=None,
-        reporter=None,
+        VulnerabilityTriageAgent(manifest_tool=manifest_tool),
+        RemediationPlannerAgent(manifest_tool=manifest_tool),
+        artifactCollectorAgent=ArtifactCollectorAgent(manifest_tool=manifest_tool),
+        ecosystems=config.ecosystems,
+        verification_enabled=config.verification_enabled,
+        additional_updates=config.additional_updates,
+        artifact_output=config.artifact_output,
     )
 
-    result = await orchestrator.run(repo)
+    try:
+        result = await orchestrator.run(repo)
+    finally:
+        await manifest_tool.aclose()
     print(json.dumps(to_jsonable(result), indent=2, sort_keys=True))
 
 
