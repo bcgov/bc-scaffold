@@ -2,6 +2,69 @@ import pytest
 
 from src.engines.remediation_grouping_engine import RemediationGroupingEngine
 from src.models.security_package_triage import SecurityPackageTriage
+from src.models.security_package_triage import PackageUpgradeRecommendation
+
+
+def _transitive(*parents):
+    return SecurityPackageTriage(
+        package="lodash", ecosystem="npm", istransitive=True,
+        vulnerablility_version_range="<4.17.21", vulnerablility_fixed_version="4.17.21",
+        package_upgrade_recommendations=[PackageUpgradeRecommendation(
+            package=name, from_version="1.0.0", qualifying_upgrade_versions=["1.1.0"],
+        ) for name in parents],
+    )
+
+
+def test_parent_group_respects_conditions_and_later_override():
+    finding = _transitive("@fluentui/react-components")
+    rules = [
+        {"matchPackageNames": ["*"], "groupName": "all"},
+        {"matchManagers": ["npm"], "matchDatasources": ["npm"],
+         "matchUpdateTypes": ["minor", "patch"], "matchPackageNames": ["@fluentui/**"],
+         "groupName": "Fluent UI"},
+        {"matchManagers": ["nuget"], "matchPackageNames": ["*"], "groupName": "wrong manager"},
+        {"matchUpdateTypes": ["major"], "matchPackageNames": ["*"], "groupName": "wrong type"},
+    ]
+    [bundle] = RemediationGroupingEngine.group_packages_by_package_rules([finding], {"packageRules": rules})
+    assert bundle.groupName == "Fluent UI"
+    assert bundle.packages == [finding]
+
+
+def test_conflicting_parent_groups_do_not_duplicate_findings(caplog):
+    finding = _transitive("@fluentui/react-components", "react-scripts")
+    bundles = RemediationGroupingEngine.group_packages_by_package_rules([finding], {"packageRules": [
+        {"matchPackageNames": ["@fluentui/**"], "groupName": "Fluent UI"},
+    ]})
+    assert len(bundles) == 1
+    assert bundles[0].groupName == "default"
+    assert "different Renovate groups" in caplog.text
+
+
+def test_unresolved_parent_can_match_name_rule_but_not_update_type():
+    from types import SimpleNamespace
+    finding = _transitive()
+    finding.transitive_dependency_occurrences = [SimpleNamespace(introducers=[
+        SimpleNamespace(package="@fluentui/react-components", version="1.0.0")])]
+    [bundle] = RemediationGroupingEngine.group_packages_by_package_rules([finding], {"packageRules": [
+        {"matchPackageNames": ["@fluentui/**"], "groupName": "Fluent UI"},
+        {"matchUpdateTypes": ["minor"], "groupName": "unknown update must not match"},
+    ]})
+    assert bundle.groupName == "Fluent UI"
+
+
+def test_unsupported_conditions_and_presets_are_reported(caplog):
+    [bundle] = RemediationGroupingEngine.group_packages_by_package_rules([_transitive("parent")], {
+        "extends": ["github>bcgov/renovate-config"],
+        "packageRules": [{"matchFileNames": ["webapp/**"], "groupName": "unsafe match"}],
+    })
+    assert bundle.groupName == "default"
+    assert "presets are not resolved" in caplog.text
+    assert "unsupported selectors" in caplog.text
+
+
+def test_name_patterns_allow_regex_and_exclusions():
+    assert RemediationGroupingEngine._matches("@fluentui/react-components", ["/^@fluentui/", "!**/react-icons"])
+    assert not RemediationGroupingEngine._matches("@fluentui/react-icons", ["@fluentui/**", "!**/react-icons"])
 
 
 @pytest.mark.parametrize("explicit_group", [False, True])

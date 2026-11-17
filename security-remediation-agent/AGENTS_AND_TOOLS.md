@@ -25,6 +25,8 @@
 
 ## Resolvers
 
+Renovate grouping matches upgrade targets (including parents of vulnerable transitive dependencies). Supported local rules use `matchPackageNames`, `matchManagers`, `matchDatasources`, and `matchUpdateTypes`; name matching supports exact names, simple globs, `/regex/` patterns, and exclusions. Later matching group rules take precedence. Inherited `extends` presets are not resolved, and unsupported selectors are skipped with warnings. Findings whose targets span different groups stay in `default` with a warning to avoid duplicating alert counts.
+
 Resolvers establish which dependency introduces a vulnerable package and which upgrades could address it.
 
 ### Relationship resolvers

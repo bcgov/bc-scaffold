@@ -208,7 +208,9 @@ class YarnRelationshipVersionResolver:
             values.extend(cls._strings(data))
             for value in values:
                 for quoted in _QUOTED.findall(value):
-                    parts = quoted.split("#")
+                    # Classic's why output replaces scoped-name slashes with #.
+                    # Rejoin @scope#name before interpreting dependency edges.
+                    parts = re.sub(r"(@[^/#]+)#([^#]+)", r"\1/\2", quoted).split("#")
                     if (
                         not parts
                         or cls._package_name(parts[-1]).casefold() != target_key

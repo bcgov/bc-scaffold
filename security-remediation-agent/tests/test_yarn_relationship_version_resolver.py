@@ -33,6 +33,18 @@ def _berry_tree():
     })
 
 
+@pytest.mark.parametrize("chain,target,expected", [
+    ("@fluentui#react-components#lodash", "lodash", ["@fluentui/react-components", "lodash"]),
+    ("@playwright#test#playwright", "playwright", ["@playwright/test", "playwright"]),
+    ("@typescript-eslint#parser#@scope#target", "@scope/target", ["@typescript-eslint/parser", "@scope/target"]),
+    ("@fluentui/react-components#lodash", "lodash", ["@fluentui/react-components", "lodash"]),
+])
+def test_classic_hash_paths_preserve_scoped_package_names(chain, target, expected):
+    output = json.dumps({"type": "info", "data": f'Hoisted from "{chain}"'})
+    paths = yarn_relationship_version_resolver.YarnRelationshipVersionResolver._parse_classic_why(output, target)
+    assert paths == [[(name, "") for name in expected]]
+
+
 @pytest.mark.asyncio
 async def test_yarn_resolver_receives_companion_manifest_and_resolves_parent(monkeypatch):
     files = {
