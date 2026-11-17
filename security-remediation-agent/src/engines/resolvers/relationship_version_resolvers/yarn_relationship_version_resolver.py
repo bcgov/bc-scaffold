@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 from collections.abc import Iterable
+from collections import deque
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
@@ -86,6 +87,17 @@ class YarnRelationshipVersionResolver:
             (directory / "package.json").write_text(self.package_text, encoding="utf-8")
             (directory / "yarn.lock").write_text(self.lock_text, encoding="utf-8")
 
+            if self.yarn_major == 1:
+                # A filtered list loses hoisted edges. Read the complete physical
+                # tree once, then follow shadow references using nearest-ancestor
+                # lookup from declared roots, preserving each installed version.
+                output = self._run_yarn(directory, "list", "--json")
+                graph_paths = self._classic_graph_paths(output, targets)
+                for target in targets:
+                    self._results[target.casefold()] = self._build_result(
+                        target, graph_paths.get(target.casefold(), []), {})
+                return
+
             for target in targets:
                 if not _PACKAGE_NAME.match(target):
                     logger.warning("Ignoring invalid package name %r", target)
@@ -95,7 +107,95 @@ class YarnRelationshipVersionResolver:
                         paths, versions = self._why(directory, target)
                     except YarnPackageNotFound:
                         paths, versions = [], {}
+                paths = [path for path in paths if path and path[0][0].casefold() in self.direct]
                 self._results[target.casefold()] = self._build_result(target, paths, versions)
+
+    def _classic_graph_paths(self, output, targets):
+        """Resolve full Yarn list trees, including hoisted shadow dependency edges."""
+        nodes = {}
+        roots = []
+
+        def collect(tree, location=()):
+            if tree.get("shadow"):
+                return
+            value = tree.get("name", "")
+            if "@" not in value[1:]:
+                return
+            name, version = value.rsplit("@", 1)
+            if not _PACKAGE_NAME.fullmatch(name) or not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][\w.+-]+)?", version):
+                return
+            key = (*location, name.casefold())
+            nodes[key] = (name, version, tree.get("children", []))
+            if not location and name.casefold() in self.direct:
+                roots.append(key)
+            for child in tree.get("children", []):
+                collect(child, key)
+
+        events = self._json_lines(output)
+        tree_events = [event for event in events if event.get("type") == "tree"]
+        if not tree_events:
+            raise ValueError("Yarn list did not return a dependency tree")
+        for event in tree_events:
+            for tree in event.get("data", {}).get("trees", []):
+                collect(tree)
+
+        wanted = {target.casefold() for target in targets if _PACKAGE_NAME.fullmatch(target)}
+        results = {name: [] for name in wanted}
+        adjacency = {}
+        reverse = {}
+        for key, (_, _, children) in nodes.items():
+            edges = []
+            for child in children:
+                child_name = self._package_name(child.get("name", "")).casefold()
+                locations = range(len(key), -1, -1) if child.get("shadow") else [len(key)]
+                for depth in locations:
+                    destination = (*key[:depth], child_name)
+                    if destination in nodes:
+                        edges.append(destination)
+                        reverse.setdefault(destination, set()).add(key)
+                        break
+            adjacency[key] = edges
+        reachable = {key for key, (name, _, _) in nodes.items() if name.casefold() in wanted}
+        pending = list(reachable)
+        while pending:
+            for parent in reverse.get(pending.pop(), ()):
+                if parent not in reachable:
+                    reachable.add(parent)
+                    pending.append(parent)
+        queue = deque((root, [], frozenset()) for root in roots if root in reachable)
+        visits = {}
+        path_groups = {name: {} for name in wanted}
+        steps = 0
+        while queue:
+            key, path, ancestors = queue.popleft()
+            if key in ancestors:
+                continue
+            root = path[0] if path else nodes[key][:2]
+            visit_key = (root, key)
+            visits[visit_key] = visits.get(visit_key, 0) + 1
+            if visits[visit_key] > 8:
+                continue  # Bound alternate paths without starving other roots.
+            steps += 1
+            if steps > 100000 or len(path) >= 200:
+                logger.warning("Yarn dependency traversal limit reached; retaining partial paths")
+                break
+            name, version, children = nodes[key]
+            path = [*path, (name, version)]
+            if name.casefold() in wanted:
+                group = path_groups[name.casefold()].setdefault((root, version), [])
+                if path not in group:
+                    group.append(path)
+            for destination in adjacency[key]:
+                if destination in reachable:
+                    queue.append((destination, path, ancestors | {key}))
+        # Round-robin sampling retains evidence from different roots/versions.
+        for name, groups in path_groups.items():
+            queues = [deque(paths) for paths in groups.values()]
+            while any(queues) and len(results[name]) < MAX_PATHS_PER_TARGET:
+                for paths in queues:
+                    if paths and len(results[name]) < MAX_PATHS_PER_TARGET:
+                        results[name].append(paths.popleft())
+        return results
 
     def _why(
         self, directory: Path, target: str

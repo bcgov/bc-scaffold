@@ -4,6 +4,7 @@ import logging
 import time
 from copy import deepcopy
 import re
+import json
 from pathlib import PurePosixPath
 
 from ..engines.remediation_verification.verification_engine import ManifestFile, VERIFICATION_DEADLINE
@@ -111,8 +112,23 @@ class RemediationVerificationAgent:
         if content is None:
             return None
         lock_path = ManifestTool.lockfile_path(ecosystem, manifest_path)
+        is_node = ecosystem.lower() in {"npm", "npm_and_yarn", "yarn"}
+        manager = json.loads(content).get("packageManager", "") if is_node else ""
+        if is_node and (ecosystem.lower() == "yarn" or manager.startswith("yarn@")):
+            lock_path = str(PurePosixPath(declaration).with_name("yarn.lock"))
         lock_content = await self.manifest_tool.get(owner, name, lock_path, ref) if lock_path else None
         manifest = ManifestFile(declaration, content, lock_path, lock_content)
+        if is_node and (manager.startswith("yarn@") or (lock_path or "").endswith("yarn.lock")):
+            # Configuration and ancestor workspaces cannot be silently omitted.
+            for directory in reversed(PurePosixPath(declaration).parents):
+                for filename in (".yarnrc", ".yarnrc.yml", ".npmrc"):
+                    config = await self.manifest_tool.get(owner, name, (directory / filename).as_posix(), ref)
+                    if config:
+                        manifest.unsupported_reason = "Yarn verification with repository registry/Yarn configuration requires a richer snapshot"
+                if directory != PurePosixPath(declaration).parent:
+                    parent = await self.manifest_tool.get(owner, name, (directory / "package.json").as_posix(), ref)
+                    if parent and json.loads(parent).get("workspaces"):
+                        manifest.unsupported_reason = "Yarn workspace verification requires workspace manifests and is unsupported"
         if ecosystem.lower() in {"npm", "npm_and_yarn"}:
             # Read only peer policy; registry credentials never enter the snapshot.
             for directory in dict.fromkeys((PurePosixPath("."), PurePosixPath(declaration).parent)):

@@ -117,7 +117,7 @@ class RecommendationResolverFactory:
         ecosystem: str,
     ) -> RecommendationResolver:
         normalized_ecosystem = ecosystem.lower()
-        if normalized_ecosystem in {"npm", "npm_and_yarn"}:
+        if normalized_ecosystem in {"npm", "npm_and_yarn", "yarn"}:
             return NpmParentVersionResolver(metadata=self.npm_metadata)
         if normalized_ecosystem in {"pip", "pypi", "poetry"}:
             return PipParentVersionResolver(pypi=self.pypi_metadata)

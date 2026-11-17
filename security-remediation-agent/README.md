@@ -27,7 +27,7 @@ flowchart TD
     NET --> P
     RC["Repository Renovate grouping rules or ecosystem / upgrade-type fallback"] --> P
     P --> V["6. RemediationVerificationAgent: resolve candidates together per declaration manifest"]
-    SNAP["Disposable metadata snapshots + npm / uv / dotnet engines"] --> V
+    SNAP["Disposable metadata snapshots + npm / Yarn Classic / uv / dotnet engines"] --> V
     V --> OUT["7. RemediationArtifactAgent"]
     E -->|No: empty plan| OUT
     OUT --> JSON["remediation-plan.json + JSON on stdout"]
@@ -62,7 +62,7 @@ Requirements:
 
 - Python 3.10 or newer and [uv](https://docs.astral.sh/uv/).
 - A `GITHUB_TOKEN` with access to the target repository's contents, pull requests, Dependabot alerts, and code-scanning alerts. Organization and repository settings also control alert access.
-- npm and `npx` for npm relationships, review, and verification; Yarn for Yarn relationship analysis.
+- npm and `npx` for npm relationships, review, and verification; Yarn for Yarn relationship analysis; npm/npx also runs the pinned Yarn Classic verifier.
 - For Python review, `pcu` (pip-check-updates) or `uvx` for requirements, `uvx` for uv projects, and Poetry with `poetry-plugin-up` for Poetry projects. Python verification uses `uv`.
 - The .NET SDK for NuGet relationship resolution and verification. The .NET reviewer uses registry APIs.
 
@@ -109,9 +109,10 @@ The Python CLI writes local artifacts. Publishing configuration, creating tracki
 | Project format | Resolution check |
 | --- | --- |
 | npm manifests with available lockfile | Lockfile-only `npm install` in a disposable snapshot, using the selected strict or legacy peer policy |
+| Standalone Yarn Classic projects | Script-free install using the exact declared Yarn 1.x version (1.22.22 by default), followed by installed-version checks |
 | Python requirements and supported PEP 621 projects | Joint `uv pip compile` resolution with `--only-binary :all:` and exact-version output checks |
 | NuGet projects with inline package versions or overrides | `dotnet restore` with NU1605/NU1608 treated as errors, followed by resolved-version checks |
-| Native Poetry, uv workspaces, Yarn/pnpm-native projects, and NuGet central versions without inline overrides | Verification unsupported; candidate collection is independent |
+| Native Poetry, uv workspaces, Yarn Berry/workspaces, pnpm-native projects, and NuGet central versions without inline overrides | Verification unsupported; candidate collection is independent |
 
 Verification stages one declaration manifest and its available lockfile; workspace siblings, local dependencies, shared build files, and private registry configuration are not staged. It can use the network and download metadata or binary distributions. Checks reflect the runner's platform and runtime. Verification does not execute application builds or tests or independently rescan advisories. Missing tools, unsupported formats, conflicting candidates, or failed resolution leave recommendations unverified.
 

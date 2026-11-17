@@ -14,7 +14,12 @@ function buildTransitiveDetails(plan) {
   let details = '';
   for (const occurrence of plan.package.dependency_occurrences || []) {
     details += `\nTransitive dependency **${occurrence.package} ${occurrence.version || 'unknown'}** is introduced via\n\n`;
-    for (const parent of occurrence.introducers || []) {
+    const paths = (occurrence.paths || []).filter(path => Array.isArray(path) && path.length > 0);
+    if (paths.length) {
+      for (const path of paths) {
+        details += `- ${path.map(node => `${node.package} ${node.version || 'unknown'}`).join(' → ')}\n`;
+      }
+    } else for (const parent of occurrence.introducers || []) {
       details += `- ${parent.package} ${parent.version || 'unknown'} → ${occurrence.package} ${occurrence.version || 'unknown'}\n`;
     }
     if (!(occurrence.introducers || []).length) details += '_No declared parent found in the lockfile._\n';

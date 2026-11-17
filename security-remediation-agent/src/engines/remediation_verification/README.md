@@ -22,6 +22,8 @@ Each candidate records `isVerified`, `verification_status`, and an optional diag
 
 `triage.verified_versions[package]` holds the accepted version, or `None` when unresolved. A failed initial candidate can remain `FAILED` even when a fallback succeeds.
 
+Unsupported verification is retained as a failed candidate internally with a diagnostic, but consolidated issue rows display **NOT VERIFIED** rather than a dependency conflict.
+
 ## Engines
 
 ### npm
@@ -39,6 +41,18 @@ npm install --package-lock-only --ignore-scripts --no-audit --no-fund --legacy-p
 ```
 
 A failed baseline stops verification. Legacy mode is disclosed in notes. Success means npm exited successfully; the lockfile graph is not inspected.
+
+### Yarn Classic
+
+Standalone projects with a Classic `yarn.lock` use the exact declared Yarn 1.x version, or 1.22.22 when `packageManager` is absent. npm-labelled findings are routed by the manifest's package manager or Yarn lockfile.
+
+```text
+npx --yes yarn@<1.x-version> install --ignore-scripts --non-interactive --production=false --no-progress
+```
+
+Candidates are pinned together in the temporary manifest. The engine checks their exact versions in installed `node_modules` package manifests. Installation may download packages, but project and dependency scripts are disabled. Peer warnings do not fail Yarn Classic verification; this limitation is recorded in notes.
+
+Berry, workspaces, Plug'n'Play, local/path dependencies, and projects requiring repository `.yarnrc`, `.yarnrc.yml`, or `.npmrc` configuration are unsupported. Repository configuration is not silently discarded.
 
 ### Python
 
@@ -63,6 +77,6 @@ The staged lockfile is removed before restore. Requested versions must appear in
 ## Limits
 
 - Snapshots contain one manifest and its available lockfile. Workspace siblings, local dependencies, shared build files, and private registry configuration are not staged.
-- Yarn/pnpm-native projects, native Poetry, uv workspaces, and NuGet central versions without inline overrides are unsupported.
+- Yarn Berry, Yarn workspaces and Plug-and-Play, pnpm-native projects, native Poetry, uv workspaces, and NuGet central versions without inline overrides are unsupported.
 - Each command has up to five minutes within a fifteen-minute manifest verification budget. Timed-out workers cannot publish results.
 - Resolution may access registries. It checks dependency resolution on the runner; application builds, tests, and independent security scans remain separate.

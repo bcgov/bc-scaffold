@@ -41,6 +41,7 @@ class ManifestFile:
     legacy_peer_deps: bool = False
     verification_note: str | None = None
     baseline_failed: bool = False
+    unsupported_reason: str | None = None
 
 
 def run(args, cwd, extra_env=None):

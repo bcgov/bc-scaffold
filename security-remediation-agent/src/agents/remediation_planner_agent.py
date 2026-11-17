@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 UPGRADE_ORDER = {"major": 0, "minor": 1, "patch": 2, "unknown": 3}
 SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1}
 # Verification messages caused by the runner/environment rather than a real incompatibility.
-ENVIRONMENT_MESSAGES = ("Required command is unavailable", "Verification timed out", "Manifest unavailable")
+ENVIRONMENT_MESSAGES = ("Required command is unavailable", "Verification timed out", "Manifest unavailable",
+                        "Verification unsupported:")
 
 
 class RemediationPlannerAgent:

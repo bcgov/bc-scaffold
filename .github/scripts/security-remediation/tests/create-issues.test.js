@@ -13,6 +13,10 @@ test('current triage output produces verified parent criteria, unresolved tracki
     summary: { total_vulnerabilities: 3, total_reviewed_prs: 5 },
     remediation_plan_bundles: [{ ecosystem: 'npm', groupName: 'current', packages: [
       { package: 'child', istransitive: true,
+        transitive_dependency_occurrences: [{ package: 'child', version: '1.0.0',
+          introducers: [{ package: 'parent', version: '1.0.0' }],
+          paths: [[{ package: 'parent', version: '1.0.0' },
+            { package: 'intermediate', version: '2.0.0' }, { package: 'child', version: '1.0.0' }]] }],
         vulnerabilities: [{ package: 'child', severity: 'high', cvss: 0, ghsa_id: 'GHSA-child' }],
         package_upgrade_recommendations: [{ package: 'parent', from_version: '1.0.0',
           minimum_patched_version: '1.1.0', highest_stable_version: '3.0.0' }],
@@ -66,6 +70,7 @@ test('current triage output produces verified parent criteria, unresolved tracki
   );
   assert.equal(created.length, 1);
   const body = created[0].body;
+  assert.ok(body.includes('parent 1.0.0 → intermediate 2.0.0 → child 1.0.0'));
   assert.match(body, /<summary><code>minimatch<\/code>: <code>3\.0\.4<\/code> -> <code>3\.1\.2<\/code><\/summary>/);
   assert.doesNotMatch(body, /<summary><code>minimatch<\/code>[^\n]*3\.1\.5/);
   assert.doesNotMatch(body, /and run the project tests/);

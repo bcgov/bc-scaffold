@@ -3,6 +3,7 @@
 
 const COLUMN_DETAILS = [
   ['Package', 'Package requiring an upgrade (a direct dependency, or the parent of a vulnerable transitive dependency)'],
+  ['Context', 'Dependency manifest or project file to which this upgrade recommendation applies'],
   ['Current', 'Currently declared or resolved version'],
   ['Minimum Fix', 'Lowest candidate expected to address the vulnerability'],
   ['Compatible Version', 'Highest version satisfying the existing version/compatibility policy, whether patched or not'],
@@ -24,7 +25,7 @@ function condenseNotes(notes, maxLines = 8, maxLength = 200) {
 }
 
 function row(target) {
-  return `| \`${target.package}\` | ${cell(target.current_version)} | ${cell(target.minimum_fixed_version)} ` +
+  return `| \`${target.package}\` | ${cell(target.manifest_path)} | ${cell(target.current_version)} | ${cell(target.minimum_fixed_version)} ` +
     `| ${cell(target.compatible_version)} | ${cell(target.verified_version)} | ${cell(target.latest_available || target.highest_fixed_version)} ` +
     `| ${target.is_update ? 'Yes' : ''} | ${target.verification_status || '—'} |`;
 }
@@ -52,8 +53,8 @@ function buildUpgradeOptionsSection(plans, bundleTargets) {
   return '## Dependency Compatibility Analysis\n\n' +
     'The following upgrade options are identified for each package that needs an upgrade (direct dependencies and parents of transitive ones). ' +
     'Recommendations prioritize the minimum version that resolves the identified vulnerabilities and passes dependency compatibility validation.\n\n' +
-    '| Package | Current | Minimum Fix | Compatible Version | Verified Version | Latest Available | Is Optional Update | Verification Status |\n' +
-    '|---|---|---|---|---|---|---|---|\n' +
+    '| Package | Context | Current | Minimum Fix | Compatible Version | Verified Version | Latest Available | Is Optional Update | Verification Status |\n' +
+    '|---|---|---|---|---|---|---|---|---|\n' +
     `${targets.map(row).join('\n')}\n\n` +
     failureNotes(targets) +
     '<details>\n<summary>Column reference</summary>\n\n' +

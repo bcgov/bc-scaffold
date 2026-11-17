@@ -89,7 +89,7 @@ flowchart LR
     style S7 fill:none,stroke:none
 ```
 
-**Supported ecosystems:** JavaScript (npm, Yarn), Python (pip/PyPI, Poetry), and .NET (NuGet). Resolution verification supports npm, Python requirements/PEP 621, and inline NuGet project references; see [verification limits](security-remediation-agent/src/engines/remediation_verification/README.md#limits).
+**Supported ecosystems:** JavaScript (npm, Yarn), Python (pip/PyPI, Poetry), and .NET (NuGet). Resolution verification supports npm, standalone Yarn Classic, Python requirements/PEP 621, and inline NuGet project references; see [verification limits](security-remediation-agent/src/engines/remediation_verification/README.md#limits).
 
 Solid arrows show execution order; dotted connectors attach agent responsibilities. Each numbered stage maps to an agent coordinated by `SecurityOrchestrator`. With no findings, the orchestrator exports an empty plan after artifact collection. Verification can be disabled. GitHub Actions uses the exported plan to prepare tracking issues and a workflow summary; issue creation requires work and a non-dry run. See the [agent architecture](security-remediation-agent/README.md#architecture) for implementation details.
 

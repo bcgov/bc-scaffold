@@ -36,7 +36,7 @@ Trace the current dependency graph to report installed versions, direct dependen
 | Resolver | Under the hood |
 | --- | --- |
 | npm | Read the dependency tree from `package.json` and `package-lock.json` using the npm CLI. |
-| Yarn | Trace introducers with `yarn why`; use generation-specific output and version lookup. |
+| Yarn | Classic traverses the full `yarn list` graph from declared dependencies, resolving hoisted references with exact versions. Berry uses `yarn why`. Intermediate dependencies remain in paths rather than becoming upgrade targets. |
 | pip | Resolve requirements into a pip dry-run report and reconstruct dependency paths from package metadata. |
 | Poetry | Trace locked dependency paths from `pyproject.toml` and `poetry.lock`; markers are not evaluated. |
 | NuGet | Restore staged projects and read dependency paths per target framework from `obj/project.assets.json`. |
@@ -57,17 +57,13 @@ yarn why <package> --recursive --json
 
 #### Yarn Classic
 
-Trace introducers:
+Read the complete versioned tree once per batch; filtering by package would omit hoisted edges:
 
 ```text
-yarn why <package> --json
+yarn list --json
 ```
 
-Look up versions:
-
-```text
-yarn list --pattern <package-pattern> --json
-```
+Paths start at declared dependencies and follow the nearest installed version for each edge. Traversal and representative paths are bounded to prevent dependency cycles and large graphs from exhausting the run.
 
 #### pip
 
@@ -173,5 +169,5 @@ Uses the NuGet registry APIs listed under recommendation resolvers; no reviewer 
 
 ## Verification engines
 
-After review and grouping, verification resolves proposed upgrades together per project using npm dependency resolution, `uv pip compile`, or `dotnet restore`. Supported verification formats are narrower than relationship-resolution support. See [remediation verification](src/engines/remediation_verification/README.md) for commands, candidate rules, and limits.
+After review and grouping, verification resolves proposed upgrades together per project using npm or Yarn Classic installs, `uv pip compile`, or `dotnet restore`. Supported verification formats are narrower than relationship-resolution support. See [remediation verification](src/engines/remediation_verification/README.md) for commands, candidate rules, and limits.
 
