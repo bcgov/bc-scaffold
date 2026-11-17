@@ -52,11 +52,12 @@ function planCriteria(vulnerablePlans) {
 
 function buildAcceptanceCriteriaSection(plans, bundleTargets) {
   const heading = '## Acceptance Criteria\n\n';
-  if (Array.isArray(bundleTargets)) return heading + targetCriteria(plans, bundleTargets);
+  const fallback = '- [ ] **Fallback remediation:** If parent upgrades cannot resolve a finding, investigate an advisory-backed dependency override using the ecosystem’s supported mechanism.\n\n';
+  if (Array.isArray(bundleTargets)) return heading + targetCriteria(plans, bundleTargets) + fallback;
 
   const vulnerablePlans = plans.filter(plan => buildAlerts(plan).length > 0);
   if (vulnerablePlans.length === 0) return `${heading}_No vulnerable packages in this group_\n\n`;
-  return heading + planCriteria(vulnerablePlans);
+  return heading + planCriteria(vulnerablePlans) + fallback;
 }
 
 module.exports = { buildAcceptanceCriteriaSection };

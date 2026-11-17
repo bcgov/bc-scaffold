@@ -3,6 +3,39 @@
 const { buildAlerts, vulnerabilityTableRows } = require('./alerts');
 const { IMP_LABEL, ACT_LABEL, isTransitivePlan, forEachCategory } = require('./plan-helpers');
 const { prLinks } = require('./remediation-prs');
+const { compareVersions } = require('./versions');
+
+// Display only: associate stable numeric versions with explicit advisory ranges.
+// Unsupported syntax stays unassigned rather than implying a remediation target.
+function affectedBy(version, range) {
+  if (!/^\d+(?:\.\d+)*$/.test(version) || !range) return null;
+  const results = range.split('||').map(branch => {
+    const terms = branch.split(',').map(term => term.trim());
+    const matches = terms.map(term => term.match(/^(<=|>=|<|>|=)?\s*(\d+(?:\.\d+)*)$/));
+    if (matches.some(match => !match)) return null;
+    return matches.every(([, operator = '=', bound]) => {
+      const comparison = compareVersions(version, bound);
+      return { '<': comparison < 0, '<=': comparison <= 0, '>': comparison > 0,
+        '>=': comparison >= 0, '=': comparison === 0 }[operator];
+    });
+  });
+  return results.includes(true) ? true : results.includes(null) ? null : false;
+}
+
+function occurrenceTargets(plan, alerts) {
+  const versions = [...new Set((plan.package.dependency_occurrences || [])
+    .map(occurrence => occurrence.version).filter(version => version && version !== 'unknown'))];
+  if (versions.length < 2) return null;
+  return versions.map(version => {
+    const relevant = alerts.filter(alert => affectedBy(version, alert.vulnerable_range) !== false);
+    const certain = relevant.length && relevant.every(alert => affectedBy(version, alert.vulnerable_range) === true
+      && /^\d+(?:\.\d+)*$/.test(alert.first_patched || ''));
+    const fixed = certain
+      ? relevant.map(alert => alert.first_patched).sort(compareVersions).at(-1)
+      : null;
+    return { version, fixed };
+  });
+}
 
 function planStatus(plan) {
   if (plan.action.action_type === 'open_issue') return 'Manual/agent review - tracking issue opened';
@@ -33,11 +66,15 @@ function buildTransitiveDetails(plan) {
 
 function buildPlanDetailSection(plan) {
   const alerts = buildAlerts(plan);
+  const targets = occurrenceTargets(plan, alerts);
   const fixedVersion = plan.package.minimum_fixed_version
     || [...new Set(alerts.map(alert => alert.first_patched).filter(Boolean))].join(', ')
     || 'N/A';
 
-  let section = `<details>\n<summary><code>${plan.package.name}</code>: <code>${plan.package.current_version_range}</code> -> <code>${fixedVersion}</code></summary>\n\n`;
+  const versionSummary = targets
+    ? targets.map(target => `<code>${target.version}</code> -> ${target.fixed ? `<code>${target.fixed}</code>` : 'requires advisory review'}`).join('; ')
+    : `<code>${plan.package.current_version_range}</code> -> <code>${fixedVersion}</code>`;
+  let section = `<details>\n<summary><code>${plan.package.name}</code>: ${versionSummary}</summary>\n\n`;
   section += `- **Remediation Status**: ${planStatus(plan)}\n`;
   if (isTransitivePlan(plan)) section += buildTransitiveDetails(plan);
 
