@@ -3,9 +3,11 @@
 const GITHUB_BODY_MAX = 65536;
 
 function mergeOrderSection() {
-  return `<details>\n<summary>Recommended Merge Order</summary>\n\n` +
-    `Validate updates before merging; merge non-breaking updates first, review breaking changes, and re-run this workflow after each merge.\n\n` +
-    `</details>\n\n`;
+  return `## Recommended Merge Order\n\n` +
+    `- Validate updates before merging.\n` +
+    `- Merge non-breaking updates first.\n` +
+    `- Review breaking changes.\n` +
+    `- Re-run this workflow after each merge.\n\n`;
 }
 
 function footerSection(runUrl) {

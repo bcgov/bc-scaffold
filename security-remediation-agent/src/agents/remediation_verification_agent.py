@@ -8,7 +8,7 @@ from pathlib import PurePosixPath
 
 from ..engines.remediation_verification.verification_engine import ManifestFile, VERIFICATION_DEADLINE
 from ..engines.remediation_verification.verification_engine_factory import VerificationEngineFactory
-from ..tools.ecosystem_manifest_tool import ManifestTool
+from ..tools.ecosystem_manifest_tool import PIP_ECOSYSTEMS, ManifestTool
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +104,10 @@ class RemediationVerificationAgent:
     async def _manifest_file(self, owner, name, ref, ecosystem, manifest_path):
         declaration = ManifestTool.declaration_path(ecosystem, manifest_path)
         content = await self.manifest_tool.get(owner, name, declaration, ref) if declaration else None
+        if content is None and declaration and declaration != manifest_path and ecosystem.lower() in PIP_ECOSYSTEMS:
+            # No requirements.in exists; the pinned requirements.txt is itself the declaration.
+            declaration = manifest_path
+            content = await self.manifest_tool.get(owner, name, declaration, ref)
         if content is None:
             return None
         lock_path = ManifestTool.lockfile_path(ecosystem, manifest_path)

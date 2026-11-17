@@ -245,8 +245,8 @@ class PackageRelationshipResolver:
             text = await self.manifest_tool.get(owner, repo, lock_path, ref)
             if not text:
                 return None
-            if kind in {"npm", "poetry"}:
-                companion = "package.json" if kind == "npm" else "pyproject.toml"
+            if kind in {"npm", "yarn", "poetry"}:
+                companion = "pyproject.toml" if kind == "poetry" else "package.json"
                 project_path = str(PurePosixPath(lock_path).parent / companion)
                 project_text = await self.manifest_tool.get(owner, repo, project_path, ref)
                 if not project_text:

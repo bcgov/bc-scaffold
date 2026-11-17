@@ -13,27 +13,29 @@ const COLUMN_DETAILS = [
 ];
 
 const cell = value => (value ? `\`${value}\`` : '—');
-const escapeAttribute = text => String(text).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-  .replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, '&#10;');
 
-function verificationCell(target) {
-  if (!target.verification_status) return '—';
-  if (target.verification_status === 'SUCCESS' || !target.verification_notes) return target.verification_status;
-  return `<abbr title="${escapeAttribute(target.verification_notes)}">${target.verification_status}</abbr>`;
+// Tool output can run to thousands of lines; keep a few error lines, each capped, so issues stay under GitHub's body limit.
+function condenseNotes(notes, maxLines = 8, maxLength = 200) {
+  return String(notes || '').split('\n')
+    .map(line => line.replace(/^npm error ?/, '').trim())
+    .filter(line => line && !/^npm warn/.test(line) && !/^at /.test(line))
+    .slice(0, maxLines)
+    .map(line => (line.length > maxLength ? `${line.slice(0, maxLength - 1)}…` : line));
 }
 
 function row(target) {
   return `| \`${target.package}\` | ${cell(target.current_version)} | ${cell(target.minimum_fixed_version)} ` +
     `| ${cell(target.compatible_version)} | ${cell(target.verified_version)} | ${cell(target.latest_available || target.highest_fixed_version)} ` +
-    `| ${target.is_update ? 'Yes' : ''} | ${verificationCell(target)} |`;
+    `| ${target.is_update ? 'Yes' : ''} | ${target.verification_status || '—'} |`;
 }
 
 function failureNotes(targets) {
   const failed = targets.filter(target => ['FAILED', 'NOT VERIFIED'].includes(target.verification_status));
   if (failed.length === 0) return '';
   const lines = failed.map(target => {
-    const notes = (target.verification_notes || '').split('\n').filter(Boolean).join('; ');
-    return `- \`${target.package}\` (${target.verification_status}): ${notes || 'no details were captured.'}`;
+    const notes = condenseNotes(target.verification_notes);
+    return [`- \`${target.package}\` (${target.verification_status}): ${notes.length === 1 ? notes[0] : (notes.length ? '' : 'no details were captured.')}`.trimEnd(),
+      ...(notes.length > 1 ? notes.map(note => `  - ${note}`) : [])].join('\n');
   });
   return `**Verification notes**\n\n${lines.join('\n')}\n\n`;
 }

@@ -1,5 +1,10 @@
 import json
 import subprocess
+from unittest.mock import AsyncMock
+
+import pytest
+
+from src.engines.package_relationship_resolver import PackageRelationshipResolver
 
 from src.engines.resolvers.relationship_version_resolvers import (
     yarn_relationship_version_resolver,
@@ -26,6 +31,35 @@ def _berry_tree():
             },
         },
     })
+
+
+@pytest.mark.asyncio
+async def test_yarn_resolver_receives_companion_manifest_and_resolves_parent(monkeypatch):
+    files = {
+        "webapp/yarn.lock": "__metadata:\n  version: 8\n",
+        "webapp/package.json": json.dumps({
+            "packageManager": "yarn@4.1.1",
+            "dependencies": {"parent": "^1.0.0"},
+        }),
+    }
+    tool = AsyncMock()
+    tool.get.side_effect = lambda owner, repo, path, ref: files.get(path)
+    monkeypatch.setattr(yarn_relationship_version_resolver.shutil, "which", lambda _: "yarn")
+    monkeypatch.setattr(
+        yarn_relationship_version_resolver.subprocess, "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command, 0, stdout=_berry_tree(), stderr=""),
+    )
+
+    resolver = await PackageRelationshipResolver(manifest_tool=tool)._build_resolver(
+        "owner", "repo", "yarn", "webapp/yarn.lock", "main",
+    )
+
+    assert resolver is not None
+    tool.get.assert_any_await("owner", "repo", "webapp/package.json", "main")
+    [occurrence] = resolver.resolve("@scope/target")["occurrences"]
+    assert occurrence["version"] == "4.2.1"
+    assert occurrence["introducers"] == [{"package": "parent", "version": "1.2.0"}]
 
 
 def test_berry_uses_recursive_why_json_and_locator_versions(monkeypatch):

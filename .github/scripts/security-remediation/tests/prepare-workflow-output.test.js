@@ -37,6 +37,18 @@ test('a pinned transitive package shows its compatible version as the upgrade ta
   assert.equal(plan.fix.upgrade_version, '13.0.3');
 });
 
+test('verification notes keep error lines and are capped so issues stay under the body limit', () => {
+  const { buildUpgradeOptionsSection } = require('../issue-template/upgrade-options');
+  const noisy = ['3.0.0: npm resolution failed (exit 1):', 'npm warn old lockfile', 'npm warn old lockfile   at x (y.js:1:1)',
+    'npm error code ERESOLVE', 'npm error peer eslint@"^5" from parser@3.0.0', ...Array(500).fill('npm error filler')].join('\n');
+  const target = { package: 'parser', affected_packages: ['parser'], current_version: '2.0.0', verification_status: 'FAILED',
+    verification_notes: noisy };
+  const section = buildUpgradeOptionsSection([{ package: { name: 'parser' } }], [target]);
+  assert.ok(section.length < 3000);
+  assert.ok(section.includes('code ERESOLVE'));
+  assert.ok(!section.includes('old lockfile'));
+});
+
 test('normalizes moderate and medium in filters, alerts, and issue severity', () => {
   const raw = { plan_id: 'alias', remediation_plan_bundles: [
     { groupName: 'group-a', ecosystem: 'npm', packages: [

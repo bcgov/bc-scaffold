@@ -28,8 +28,11 @@ function buildTransitiveDetails(plan) {
 
 function buildPlanDetailSection(plan) {
   const alerts = buildAlerts(plan);
+  const fixedVersion = plan.package.minimum_fixed_version
+    || [...new Set(alerts.map(alert => alert.first_patched).filter(Boolean))].join(', ')
+    || 'N/A';
 
-  let section = `<details>\n<summary><code>${plan.package.name}</code>: <code>${plan.package.current_version_range}</code> -> <code>${plan.fix.upgrade_version || 'N/A'}</code></summary>\n\n`;
+  let section = `<details>\n<summary><code>${plan.package.name}</code>: <code>${plan.package.current_version_range}</code> -> <code>${fixedVersion}</code></summary>\n\n`;
   section += `- **Remediation Status**: ${planStatus(plan)}\n`;
   if (isTransitivePlan(plan)) section += buildTransitiveDetails(plan);
 

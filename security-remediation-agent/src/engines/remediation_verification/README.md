@@ -1,47 +1,68 @@
 # Remediation verification
 
-The pipeline runs triage, compatibility review, Renovate grouping, verification, then reporting.
-The verification agent groups recommendations by declaration manifest across all bundles.
-It stages the original manifest and available lockfile in a temporary directory using the repository ref.
-The checkout is never changed.
+Verification runs after review and grouping. It resolves proposed upgrades together per declaration manifest in temporary snapshots, leaving the checkout unchanged.
+
+[Architecture](../../../README.md#architecture) · [Agents and tools](../../../AGENTS_AND_TOOLS.md)
 
 ## Candidate selection
 
-Recommendations for the same normalized package share one resolver pin. The candidate must be
-present in every recommendation's qualifying list. The lowest common candidate is tried first;
-when it fails, a shared compatible candidate may be retried. Fallback candidates are resolved
-with previously accepted upgrades. Recommendations without a common candidate remain unresolved.
-Every returned version belongs to a set that resolved together.
+- Duplicate recommendations share one package pin drawn from their common qualifying versions. The first common candidate in recommendation order is tried.
+- Failed candidates may retry at a shared reviewed compatible version, alongside accepted upgrades.
+- Successful versions populate `triage.verified_versions` and produce Renovate rules. Failed or unsupported recommendations remain unresolved, with diagnostics in the plan.
 
-The agent assigns `verified_version` from the final result. Candidates retain `isVerified`,
-`verification_status` (`SUCCESS` or `FAILED`), and diagnostic messages.
+## Verification status
+
+Each candidate records `isVerified`, `verification_status`, and an optional diagnostic in `verification_message`.
+
+| Status | Meaning |
+| --- | --- |
+| `SUCCESS` | The candidate resolved with the accepted upgrade set; `isVerified` is `true`. |
+| `FAILED` | Resolution failed, verification was unsupported, or inputs, tools, or time were unavailable; `isVerified` is `false`. Check the diagnostic for the reason. |
+| Unset | The candidate was not attempted; `isVerified` remains `false`. |
+
+`triage.verified_versions[package]` holds the accepted version, or `None` when unresolved. A failed initial candidate can remain `FAILED` even when a fallback succeeds.
 
 ## Engines
 
-- npm resolves the original manifest first with `npm install --package-lock-only --ignore-scripts
-  --no-audit --no-fund --legacy-peer-deps=false`. Repository-root and project `.npmrc`
-  `legacy-peer-deps=true` settings select legacy mode immediately. Only a baseline `ERESOLVE`
-  failure triggers an automatic legacy retry. Candidate attempts use the same flags as the baseline.
-  Legacy mode is disclosed in triage notes because it does not check peer compatibility.
-  A failed baseline stops candidate attempts and produces one detailed manifest note.
-  Successful npm exit is the verification criterion; the lockfile graph is not inspected.
-- Python requirements and PEP 621 projects use `uv pip compile` with joint exact constraints
-  and `--only-binary :all:`. Selected requirement pins replace their original specifiers;
-  other requirements remain constraints. The resolved output must contain the selected versions.
-- NuGet project files use `dotnet restore`, with NU1605 and NU1608 treated as errors.
-  The engine verifies selected versions in `obj/project.assets.json`. Central package management
-  without inline versions is unsupported.
+### npm
 
-Snapshots currently contain only the selected manifest and lockfile. Workspace siblings, local
-path dependencies, shared build properties and private registry settings are not staged.
-Yarn/pnpm-native projects, native Poetry and uv workspaces are unsupported by these engines.
+Resolve the original manifest first, then pin upgrades using the same peer policy:
 
-## Execution limits
+```text
+npm install --package-lock-only --ignore-scripts --no-audit --no-fund --legacy-peer-deps=false
+```
 
-Each subprocess has a maximum five-minute timeout, bounded by the remaining fifteen-minute
-manifest budget. Worker copies isolate candidate mutations until completion, so a timed-out
-worker cannot overwrite published results. The deadline prevents further resolver attempts.
+A root/project `.npmrc` setting of `legacy-peer-deps=true` selects legacy mode, with project settings taking precedence. Otherwise, only a baseline `ERESOLVE` failure triggers a legacy retry:
 
-Resolution may access registries and download metadata or binary distributions. It does not run
-project builds or tests and does not establish runtime readiness or an independent security scan.
-Verification reflects the resolver's current platform and runtime, rather than every deployment target.
+```text
+npm install --package-lock-only --ignore-scripts --no-audit --no-fund --legacy-peer-deps
+```
+
+A failed baseline stops verification. Legacy mode is disclosed in notes. Success means npm exited successfully; the lockfile graph is not inspected.
+
+### Python
+
+Compile requirements or supported PEP 621 inputs with exact candidate constraints:
+
+```text
+uv pip compile <manifest> --constraint .remediation-constraints.txt --only-binary :all: --output-file .remediation-resolved.txt
+```
+
+Selected requirement specifiers are replaced; PEP 621 declarations must permit the constraints. The output must contain the requested versions.
+
+### NuGet
+
+Pin inline project references and restore, treating downgrade and constraint warnings as errors:
+
+```text
+dotnet restore <project> --nologo --verbosity minimal -p:EnableWindowsTargeting=true -p:WarningsAsErrors=NU1605%3BNU1608
+```
+
+The staged lockfile is removed before restore. Requested versions must appear in `obj/project.assets.json`.
+
+## Limits
+
+- Snapshots contain one manifest and its available lockfile. Workspace siblings, local dependencies, shared build files, and private registry configuration are not staged.
+- Yarn/pnpm-native projects, native Poetry, uv workspaces, and NuGet central versions without inline overrides are unsupported.
+- Each command has up to five minutes within a fifteen-minute manifest verification budget. Timed-out workers cannot publish results.
+- Resolution may access registries. It checks dependency resolution on the runner; application builds, tests, and independent security scans remain separate.

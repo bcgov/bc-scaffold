@@ -21,7 +21,9 @@ test('current triage output produces verified parent criteria, unresolved tracki
         package_upgrade_recommendations: [{ package: 'unverified', highest_stable_version: '9.0.0' }] },
       { package: 'unresolved', vulnerabilities: [{ severity: 'high', cvss: 0 }] },
       { package: 'minimatch', current_version: '3.0.4', vulnerablility_fixed_version: '3.1.2',
-        vulnerabilities: [{ severity: 'high', cvss: 0 }] },
+        vulnerabilities: [{ severity: 'high', cvss: 0 }],
+        package_upgrade_recommendations: [{ package: 'minimatch', minimum_patched_version: '3.1.2' }],
+        verified_versions: { minimatch: '3.1.5' } },
       { package: 'candidate', current_version: '1.0.0', vulnerabilities: [{ severity: 'high', cvss: 0 }],
         package_upgrade_recommendations: [{ package: 'candidate', from_version: '1.0.0',
           minimum_patched_version: '1.1.0', highest_stable_version: '2.0.0' }],
@@ -64,6 +66,8 @@ test('current triage output produces verified parent criteria, unresolved tracki
   );
   assert.equal(created.length, 1);
   const body = created[0].body;
+  assert.match(body, /<summary><code>minimatch<\/code>: <code>3\.0\.4<\/code> -> <code>3\.1\.2<\/code><\/summary>/);
+  assert.doesNotMatch(body, /<summary><code>minimatch<\/code>[^\n]*3\.1\.5/);
   assert.doesNotMatch(body, /and run the project tests/);
   assert.match(body, /Upgrade `parent` from `1\.0\.0` to `1\.1\.0` \[compatible: `1\.5\.0`, highest fixed: `3\.0\.0`\]\./);
   assert.match(body, /Upgrade `minimatch` from `3\.0\.4` to `3\.1\.2` \[compatible: `unknown`, highest fixed: `unknown`\]/);
@@ -170,8 +174,8 @@ test('tracking issues group by ecosystem and major package or minor-patch, acros
   assert.match(minor.body, /<details>\n<summary>Reconciliation Notes<\/summary>\n\n    Manifest: package\.json/);
   assert.doesNotMatch(minor.body, /DotnetSecurityFailures/);
   assert.match(minor.body, /<summary>Reconciliation Notes<\/summary>[\s\S]*axios 1\.0\.0 \u2192 2\.0\.0[\s\S]*?<\/details>/);
-  assert.match(minor.body, /<details>\n<summary>Recommended Merge Order<\/summary>\n\nValidate updates before merging;[^\n]+\n\n<\/details>/);
-  assert.doesNotMatch(minor.body, /<details open|## Recommended Merge Order|## Reconciliation Notes/);
+  assert.match(minor.body, /## Recommended Merge Order\n\n- Validate updates before merging\.\n- Merge non-breaking updates first\.\n- Review breaking changes\.\n- Re-run this workflow after each merge\.\n\n/);
+  assert.doesNotMatch(minor.body, /<details open|<summary>Recommended Merge Order|## Reconciliation Notes/);
   assert.ok(minor.body.indexOf('<summary>Reconciliation Notes</summary>') >
     minor.body.indexOf('## Remediation Pull Requests'));
 
