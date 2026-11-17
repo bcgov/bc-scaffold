@@ -165,6 +165,8 @@ poetry up --dry-run --no-ansi --no-interaction
 
 ### .NET reviewer
 
+Installed prerelease versions do not block stable-release review. NuGet security candidate selection prefers stable fixes; automatic prerelease fallback is documented under [verification](src/engines/remediation_verification/README.md#nuget).
+
 Uses the NuGet registry APIs listed under recommendation resolvers; no reviewer CLI is run.
 
 ## Verification engines

@@ -114,12 +114,10 @@ class DotNetRecommendationResolver:
             if len(choices) != 1:
                 raise NuGetResolutionError(f"Ambiguous or missing version for {name}")
             value = next(iter(choices))
-            try:
-                stable_version_key(value)
-            except ValueError as exc:
+            if _version(value) is None:
                 raise NuGetResolutionError(
-                    f"{name}: {value!r} needs MSBuild/range/prerelease resolution"
-                ) from exc
+                    f"{name}: {value!r} needs MSBuild/range resolution"
+                )
             previous = versions.get(name.casefold())
             if previous is not None and previous != value:
                 raise NuGetResolutionError(f"Multiple versions for {name}; resolve per framework")
@@ -152,14 +150,23 @@ class DotNetRecommendationResolver:
                     raise ValueError("Invalid versions response")
             except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
                 raise NuGetResolutionError(f"NuGet lookup failed for {name}: {exc}") from exc
-            current = stable_version_key(requested)
+            current = _version(requested)
             candidates = [v for v in versions if STABLE_VERSION.fullmatch(v)
-                          and stable_version_key(v)[0] == current[0]
-                          and stable_version_key(v) > current]
+                          and Version(v).major == current.major
+                          and Version(v) > current]
             result[f"{name}:requested"] = requested
             if candidates:
                 result[f"{name}:candidate"] = max(candidates, key=stable_version_key)
         return result
+
+
+def _version(raw) -> Version | None:
+    if not isinstance(raw, str):
+        return None
+    try:
+        return Version(raw.split("+", 1)[0])
+    except InvalidVersion:
+        return None
 
 
 def _stable(raw) -> Version | None:
@@ -173,7 +180,7 @@ def _stable(raw) -> Version | None:
     return None if version.is_prerelease or version.is_devrelease else version
 
 
-def parse_nuget_range(text) -> tuple[Version | None, bool, Version | None, bool] | None:
+def parse_nuget_range(text, *, include_prerelease=False) -> tuple[Version | None, bool, Version | None, bool] | None:
     """Parse a NuGet version range into (lower, lower_inclusive, upper, upper_inclusive).
 
     Returns None for unsupported syntax such as floating versions or prereleases.
@@ -181,18 +188,19 @@ def parse_nuget_range(text) -> tuple[Version | None, bool, Version | None, bool]
     if not isinstance(text, str) or not text.strip():
         return None
     text = text.strip()
+    parse = _version if include_prerelease else _stable
     if text[0] not in "[(":
-        minimum = _stable(text)
+        minimum = parse(text)
         return (minimum, True, None, False) if minimum else None
     if text[-1] not in "])":
         return None
     inner = text[1:-1]
     low_inclusive, high_inclusive = text[0] == "[", text[-1] == "]"
     if "," not in inner:
-        exact = _stable(inner.strip())
+        exact = parse(inner.strip())
         return (exact, True, exact, True) if exact and low_inclusive and high_inclusive else None
     low_text, high_text = (part.strip() for part in inner.split(",", 1))
-    low, high = _stable(low_text) if low_text else None, _stable(high_text) if high_text else None
+    low, high = parse(low_text) if low_text else None, parse(high_text) if high_text else None
     if (low_text and low is None) or (high_text and high is None):
         return None
     if low is None and high is None:
@@ -255,18 +263,19 @@ class NuGetRegistryClient:
                 self._get_json(page["@id"]) if "items" not in page else _done(page)
                 for page in pages
             ))
-            return self._releases(leaf for page in pages for leaf in page["items"])
+            return self._releases((leaf for page in pages for leaf in page["items"]),
+                                  include_prerelease=True)
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             raise NuGetResolutionError(f"NuGet lookup failed for {name}: {exc}") from exc
 
     @staticmethod
-    def _releases(leaves) -> list[NuGetRelease]:
+    def _releases(leaves, *, include_prerelease=False) -> list[NuGetRelease]:
         releases = []
         for leaf in leaves:
             entry = leaf.get("catalogEntry") if isinstance(leaf, dict) else None
             if not isinstance(entry, dict) or entry.get("listed") is False or entry.get("deprecation"):
                 continue
-            version = _stable(entry.get("version"))
+            version = (_version if include_prerelease else _stable)(entry.get("version"))
             if version is None:
                 continue
             dependencies: dict[str, list[str]] = {}
@@ -319,7 +328,7 @@ class NuGetRegistryClient:
         cycles, missing paths and traversal limits fail closed. Raises
         NuGetResolutionError when registry metadata cannot be loaded.
         """
-        current = _stable(current_parent_version)
+        current = _version(current_parent_version)
         if current is None:
             return []
         paths = dependency_paths or [[{"package": parent}, {"package": child}]]
@@ -367,10 +376,13 @@ class NuGetRegistryClient:
             result = True
             for dependency in edges.get(name, ()):
                 for text in release.dependencies.get(dependency, ()):
-                    parsed = parse_nuget_range(text)
+                    parsed = parse_nuget_range(text, include_prerelease=True)
+                    prerelease_range = parsed and any(
+                        bound and (bound.is_prerelease or bound.is_devrelease) for bound in (parsed[0], parsed[2]))
                     options = [
                         entry for entry in metadata.get(dependency, ())
                         if parsed and _in_range(entry.version, parsed)
+                        and (prerelease_range or not (entry.version.is_prerelease or entry.version.is_devrelease))
                     ]
                     if not options or not safe(dependency, options[0], ancestors | {key}):
                         result = False
@@ -381,14 +393,17 @@ class NuGetRegistryClient:
             return result
 
         parent_key = parent.casefold()
-        candidates = []
+        candidates, prereleases = [], []
         for release in metadata.get(parent_key, ()):
             if release.version <= current or release.version.major != current.major:
                 continue
             expansions = 0
             if safe(parent_key, release, frozenset()):
-                candidates.append(release.raw)
-        return candidates
+                if release.version.is_prerelease or release.version.is_devrelease:
+                    prereleases.append(release.raw)
+                else:
+                    candidates.append(release.raw)
+        return candidates or prereleases
 
 
 async def _done(value):

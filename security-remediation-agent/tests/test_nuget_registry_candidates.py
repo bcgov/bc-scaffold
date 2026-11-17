@@ -48,6 +48,35 @@ async def select(packages, *, status=None, paged=(), paths=None, current="1.0.0"
 VULN = [leaf("1.0.0"), leaf("2.0.0")]
 
 
+@pytest.mark.asyncio
+async def test_installed_prerelease_can_upgrade_to_stable_without_opt_in():
+    packages = {"app.lib": [leaf("1.1.0", {"Vuln": "2.0.0"})], "vuln": VULN}
+    assert (await select(packages, current="1.0.0-alpha")).qualifying_upgrade_versions == ["1.1.0"]
+
+
+@pytest.mark.asyncio
+async def test_stable_security_candidate_wins_over_prerelease_fallback():
+    packages = {"app.lib": [leaf("1.1.0-beta", {"Vuln": "2.0.0"}),
+                            leaf("1.2.0", {"Vuln": "2.0.0"})], "vuln": VULN}
+    assert (await select(packages)).qualifying_upgrade_versions == ["1.2.0"]
+
+
+@pytest.mark.asyncio
+async def test_prerelease_fallback_is_automatic_and_requires_safe_dependency_evidence():
+    packages = {"app.lib": [leaf("1.1.0", {"Vuln": "1.0.0"}),
+                            leaf("1.2.0-beta", {"Vuln": "2.0.0"}),
+                            leaf("1.3.0-beta", {"Vuln": "1.0.0"})], "vuln": VULN}
+    assert (await select(packages)).qualifying_upgrade_versions == ["1.2.0-beta"]
+
+
+@pytest.mark.asyncio
+async def test_prerelease_dependency_range_is_supported_in_fallback():
+    packages = {"app.lib": [leaf("1.1.0-beta", {"Mid": "[1.1.0-beta]"})],
+                "mid": [leaf("1.1.0-beta", {"Vuln": "2.0.0"})], "vuln": VULN}
+    paths = [[{"package": "App.Lib"}, {"package": "Mid"}, {"package": "Vuln"}]]
+    assert (await select(packages, paths=paths)).qualifying_upgrade_versions == ["1.1.0-beta"]
+
+
 @pytest.mark.parametrize("text,expected", [
     ("1.0", True), ("[1.0]", True), ("[1.0,2.0)", True), ("(1.0,)", True), ("(,2.0]", True),
     ("1.*", False), ("[1.0-beta,)", False), ("", False), ("(,)", False), ("(1.0)", False),

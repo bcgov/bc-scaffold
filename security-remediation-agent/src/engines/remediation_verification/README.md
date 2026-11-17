@@ -66,6 +66,8 @@ Selected requirement specifiers are replaced; PEP 621 declarations must permit t
 
 ### NuGet
 
+Installed prerelease versions are valid starting points. NuGet automatically prefers stable security candidates and falls back to same-major prereleases only when no stable candidate qualifies. Fallbacks are labelled in the plan and compatibility table and must pass the same resolution checks before generating Renovate rules. This behavior has no configuration switch. Unsupported central package management still prevents verification.
+
 Pin inline project references and restore, treating downgrade and constraint warnings as errors:
 
 ```text

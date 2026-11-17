@@ -25,7 +25,7 @@ function condenseNotes(notes, maxLines = 8, maxLength = 200) {
 }
 
 function row(target) {
-  return `| \`${target.package}\` | ${cell(target.manifest_path)} | ${cell(target.current_version)} | ${cell(target.minimum_fixed_version)} ` +
+  return `| \`${target.package}\`${target.prerelease_fallback ? ' (prerelease fallback)' : ''} | ${cell(target.manifest_path)} | ${cell(target.current_version)} | ${cell(target.minimum_fixed_version)} ` +
     `| ${cell(target.compatible_version)} | ${cell(target.verified_version)} | ${cell(target.latest_available || target.highest_fixed_version)} ` +
     `| ${target.is_update ? 'Yes' : ''} | ${target.verification_status || '—'} |`;
 }

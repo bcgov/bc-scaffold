@@ -125,6 +125,7 @@ class RemediationPlannerAgent:
                  "minimum_fixed_version": recommendation.minimum_patched_version,
                  "compatible_version": package.compatible_version(recommendation.package),
                  "review_status": recommendation.compatible_review_status,
+                 "allow_prerelease": recommendation.allow_prerelease,
                  "highest_fixed_version": recommendation.highest_stable_version,
                  "qualifying_versions": [c.version for c in recommendation.qualifying_upgrade_versions]}
                 for recommendation in package.package_upgrade_recommendations
@@ -143,6 +144,7 @@ class RemediationPlannerAgent:
                     for parent in occurrence.introducers
                 ]
             for entry in entries:
+                entry.setdefault("allow_prerelease", False)
                 entry.setdefault("review_status", None)
                 entry["manifest_path"] = manifest_path
                 key = (package.ecosystem.lower(), manifest_path,
@@ -183,7 +185,7 @@ class RemediationPlannerAgent:
         targets = []
         for key, group in grouped.items():
             entries = group["entries"]
-            target = {key: value for key, value in entries[0].items() if key not in {"qualifying_versions", "review_status"}}
+            target = {key: value for key, value in entries[0].items() if key not in {"qualifying_versions", "review_status", "allow_prerelease"}}
             target["is_update"] = group["is_update"]
             target["verification_status"] = (
                 None if not group["requires"] else "SUCCESS" if not group["unverified"]
@@ -233,7 +235,8 @@ class RemediationPlannerAgent:
             allowed = [
                 version for version in ordered
                 if evidenced and current_majors == {version.major}
-                and not version.is_prerelease and not version.is_devrelease
+                and (not (version.is_prerelease or version.is_devrelease)
+                     or all(entry["allow_prerelease"] for entry in entries))
                 and limits_valid and all(version <= limit for limit in compatibility_limits)
                 and all(version > Version(current) for current in current_versions)
             ]
@@ -245,6 +248,8 @@ class RemediationPlannerAgent:
                 preferred = None
             chosen = preferred if preferred in allowed else next(iter(allowed), None)
             target["compatible_version"] = parsed[chosen] if chosen is not None else ""
+            if any(v.is_prerelease or v.is_devrelease for v in ordered):
+                target["prerelease_fallback"] = True
             if target["verification_status"] is None and chosen is None:
                 target["verification_status"] = "NOT VERIFIED"
                 target["verification_notes"] = target["verification_notes"] or "No upgrade candidate was identified for this package, so there was nothing to verify."

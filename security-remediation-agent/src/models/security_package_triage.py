@@ -85,6 +85,7 @@ class PackageUpgradeRecommendation:
     # Outcome of the compatible-version review: upgrade_found, no_upgrade,
     # excluded, not_declared or review_failed. None means no review has run.
     compatible_review_status: str | None = None
+    allow_prerelease: bool = False
 
     def __post_init__(self) -> None:
         """Derive bounds from stable qualifying upgrades, not all registry releases.
@@ -104,7 +105,7 @@ class PackageUpgradeRecommendation:
                 parsed = Version(candidate.version)
             except InvalidVersion:
                 continue
-            if parsed.is_prerelease or parsed.is_devrelease:
+            if (parsed.is_prerelease or parsed.is_devrelease) and not self.allow_prerelease:
                 continue
             if current is not None and parsed <= current:
                 continue
@@ -112,7 +113,8 @@ class PackageUpgradeRecommendation:
         ordered = sorted(versions)
         self.qualifying_upgrade_versions = [versions[version] for version in ordered]
         self.minimum_patched_version = self.qualifying_upgrade_versions[0].version if ordered else ""
-        self.highest_stable_version = self.qualifying_upgrade_versions[-1].version if ordered else ""
+        stable = [v for v in ordered if not v.is_prerelease and not v.is_devrelease]
+        self.highest_stable_version = versions[stable[-1]].version if stable else ""
         self.default_compatible_version = next(
             (versions[version].version for version in ordered if current is not None and version.major == current.major),
             "",

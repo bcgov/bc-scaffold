@@ -100,5 +100,9 @@ class DotNetCompatibleVersionReviewer:
                 for recommendation in triage.package_upgrade_recommendations:
                     candidate = recommendations.get(f"{recommendation.package.casefold()}:candidate")
                     if candidate:
+                        if recommendation.allow_prerelease and candidate not in {
+                            c.version for c in recommendation.qualifying_upgrade_versions
+                        }:
+                            continue  # Preserve the evidence-backed security fallback.
                         triage.compatible_versions[recommendation.package] = candidate
                         recommendation.compatible_review_status = "upgrade_found"

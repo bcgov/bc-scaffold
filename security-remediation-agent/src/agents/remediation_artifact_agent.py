@@ -102,7 +102,12 @@ class RemediationArtifactAgent:
                     if not version:
                         continue
                     try:
-                        Version(version)
+                        parsed = Version(version)
+                        if (parsed.is_prerelease or parsed.is_devrelease) and not (
+                            triage.ecosystem.lower() == "nuget"
+                            and recommendation.allow_prerelease
+                        ):
+                            continue
                     except InvalidVersion:
                         logger.warning("Skipping invalid verified version for %s", recommendation.package)
                         continue
@@ -112,5 +117,6 @@ class RemediationArtifactAgent:
                         selected[key] = version
         return [{"description": GENERATED_DESCRIPTION, "matchDatasources": [datasource],
                  "matchFileNames": [path], "matchPackageNames": [name],
+                 **({"ignoreUnstable": False} if Version(version).is_prerelease or Version(version).is_devrelease else {}),
                  "allowedVersions": "/^" + re.escape(version) + "$/"}
                 for (datasource, path, name), version in sorted(selected.items())]

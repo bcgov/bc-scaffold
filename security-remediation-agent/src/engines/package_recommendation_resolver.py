@@ -278,6 +278,7 @@ class PackageRecommendationResolver:
             qualifying_upgrade_versions=list(resolution.qualifying_upgrade_versions),
             requires_verification=getattr(resolution, "requires_verification", False),
             source=source,
+            allow_prerelease=isinstance(version_resolver, NuGetParentVersionResolver),
         )
 
     def filter_remediation_pull_requests(

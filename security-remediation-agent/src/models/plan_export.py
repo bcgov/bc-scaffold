@@ -40,6 +40,7 @@ class ExportRecommendation:
     # Every qualifying version as a plain string; outcomes only for versions that were tried.
     candidates: list[str] = field(default_factory=list)
     verification: list[ExportAttempt] = field(default_factory=list)
+    prerelease_fallback: bool = False
 
 
 @dataclass
@@ -88,6 +89,8 @@ def _recommendation(recommendation, triage) -> ExportRecommendation:
         highest_stable_version=recommendation.highest_stable_version,
         verified_version=triage.verified_version(recommendation.package),
         compatible_review_status=recommendation.compatible_review_status,
+        prerelease_fallback=recommendation.allow_prerelease and bool(candidates) and all(
+            "-" in c.version for c in candidates),
         candidates=[candidate.version for candidate in candidates],
         verification=[ExportAttempt(c.version, c.verification_status, c.verification_message)
                       for c in candidates if c.verification_status or c.verification_message],
