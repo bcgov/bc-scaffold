@@ -9,6 +9,8 @@ authors = [
 ]
 
 dependencies = [
+  # The relationship resolver invokes this interpreter's pip dry-run report.
+  "pip>=23.1",
   # Core HTTP + GitHub integration
   "httpx>=0.27.0",
   "requests>=2.31.0",
@@ -29,7 +31,9 @@ dependencies = [
   "langchain-core>=0.2.0",
   "openai>=1.30.0",
   "tomli>=2.4.1",
+  "packaging>=23.0",
   "spdx-tools>=0.8.3",
+  "semantic-version>=2.10.0",
 ]
 
 [project.optional-dependencies]
@@ -50,7 +54,13 @@ mcp = [
 ]
 
 [project.scripts]
-security-agent = "cli.main:app"
+security-agent = "main:main"
+
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -83,3 +93,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

@@ -1,213 +1,118 @@
 # Security and Vulnerability Remediation Scaffolding
 
-> [!NOTE]
-> These tools are in the early stages and are a work in progress.
+Reusable automation for reviewing GitHub security findings and planning dependency upgrades across repositories.
 
-> [!WARNING]
-> The repo has a running naming issue, the term `Agent/agent` such as and in the `/security-remediation-agent/src/agents/***_agent.py` are too loosely utitlized.
-> These artifacts are better termed LangChain workflows invoking tools and being AI ready but not remotely an agent in the AI agentic sense.
->
-> A future enhancement will clean up this misnomer and tighten the definitions within the code base and the documentation.
->
-> So we ask the reader to please trust the stressed point below of this solution as not being agentic in nature. As the maintainers respect the ministries concerns.
+The Python workflow traces vulnerable dependencies and their parent packages, uses npm, Python, and .NET reviewers to recommend compatible upgrades, and exports a remediation plan with Renovate rules for upgrades verified through dependency resolution. Dependabot findings drive package remediation; selected code-scanning findings contribute to the summary.
 
-The purpose of this project is to provide a reusable set of automation tools for managing Security and Vulnerability Remediation within your project.
+The pipeline is deterministic and does not require an LLM. Resolution verification checks dependency compatibility on the runner; application builds, tests, and security review remain part of the target project's release process.
 
-## Design Goal
-
-Enable small teams with small budgets to effectively manage security and vulnerability remediation across multiple projects in a consistent manner.
-
-## Key Features
-
-- Enable early detection of security and vulnerability issues.  Enabling teams to actively identify and address issues as they arise.
-- Support volume security and vulnerability remediation in existing repos in a manageable way.
-- Enable workflows to be gated on the presence or absence of security and vulnerability issues.
-- Reusability.
-- Easily integrated into any project.
-- Provide support for triggered and scheduled scanning.
-- Unattended processes that naturally fits into the project and development workflow.
-  - Results are presented as a discrete set of issues and related PRs that are easily managed.
-    - PRs are rolled up into breaking and non-breaking changes.
-- Utilizes readily available tools and integrates them with the GitHub dependency and advanced security tooling enabling a more complete picture and powerful feedback loops.
-- Minimizes use of coding agents
-  - This is a key factor when utilizing the reusable actions and workflows within GitHib organizations such as the BC Gov orgs where cloud agents are unavailable due to security concerns and complications related to agent licensing and execution within an organization.
-
-## Current State
-
-The tooling, once integrated with your project, will:
-1. Scan your project dependencies and keep your project's dependency graph complete, up to date, and published within the repository's Dependency graph.
-2. Perform code quality and vulnerability scanning and publish the results to the GitHub Advanced Security reports.
-3. Perform these scans against each PR, and on a scheduled basis.
-
-These actions alone:
-1. Provide a more complete picture of your project's current security posture.
-2. Enable the tools within GitHub, such as dependabot, to perform a much more comprehensive job.
-3. Enables gated workflows to be created.  For example:
-    - Fail PRs when there are critical quality, security, or vulnerability issues detected.
-    - Stop code from being deployed when there are critical quality, security, or vulnerability issues detected even in an active deployment pipeline.
-
-The workflows and actions then use deterministic processes to scan the results and rolled up issues and PRs which are intended to minimize human review efforts, rather than simply generating the typical slew of PRs one typically sees with Dependabot and other tools.  That slew of PRs will still be generated, but can be ignored as the rolled up PRs cover the issues.
-
-At this stage the rollup PRs are drafts containing the instructions and details needed for a human or agent to fill in the implementation.  Since cloud agents are unavailable in the BCGov orgs (for good reasons mentioned above) the PRs can not be directly assigned to an agent in the main repo.  A developer would have to fork the repo into an org that allows cloud agents or run the agent processes locally in their development environment.  Since this violates the primary design goal (low effort) the team is investigating ways to replace the argentic requirement with additional deterministic tooling to enable complete remediation PRs to be presented without agent evolvement.
-
-### High Level Workflows
-
-#### Dependency Graph
+## Overall flow
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"curve": "linear", "nodeSpacing": 16, "rankSpacing": 24}}}%%
 flowchart LR
-  trigger["Triggered or Scheduled
-  Run"]
+    subgraph ORCH["SecurityOrchestrator: collect → triage → review → plan → verify → export"]
+        direction LR
+        subgraph S1[" "]
+            direction TB
+            A["1. VulnerabilityCollectorAgent<br/>Collect findings"]
+            A -.- AD["Collect Dependabot and<br/>selected code-scanning findings"]
+        end
+        subgraph S2[" "]
+            direction TB
+            B["2. ArtifactCollectorAgent<br/>Gather repository evidence"]
+            B -.- BD["Capture repository reference<br/>Cache manifests, lockfiles, bot PRs"]
+        end
+        subgraph S3[" "]
+            direction TB
+            C["3. VulnerabilityTriageAgent<br/>Trace and triage"]
+            C -.- CD["Trace dependencies and parent paths<br/>Find fix targets and match bot PRs"]
+        end
+        subgraph S4[" "]
+            direction TB
+            D["4. VulnerabilityReviewerAgent<br/>Review candidates"]
+            D -.- DD["npm, Python, .NET reviewers<br/>Collect compatible upgrade candidates"]
+        end
+        subgraph S5[" "]
+            direction TB
+            E["5. RemediationPlannerAgent<br/>Build remediation groups"]
+            E -.- ED["Apply Renovate or fallback groups<br/>Consolidate upgrade targets"]
+        end
+        subgraph S6[" "]
+            direction TB
+            F["6. RemediationVerificationAgent<br/>Verify resolution"]
+            F -.- FD["Resolve upgrades together per manifest<br/>Record verified versions and diagnostics"]
+        end
+        subgraph S7[" "]
+            direction TB
+            G["7. RemediationArtifactAgent<br/>Export results"]
+            G -.- GD["remediation-plan.json: all findings<br/>renovate.json5: verified upgrades"]
+        end
+        S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+    end
 
-  scan["Deterministically
-  Scan Project Dependencies"]
+    subgraph WORKFLOW["GitHub Actions"]
+        direction TB
+        H["Create or update tracking issues"]
+        H -.- HD["Filter severity; group by ecosystem<br/>and upgrade group<br/>Skip issues in dry runs or with no work"]
+    end
+    ORCH -->|Remediation plan| WORKFLOW
 
-  report["Generate Complete
-  SBOM"]
-
-  publish["Publish to Repository
-  Insights - Dependency graph"]
-
-  trigger --> scan
-  scan --> report
-  report --> publish
+    classDef collect fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef review fill:#faf5ff,stroke:#9333ea,color:#581c87
+    classDef verify fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef export fill:#f0fdf4,stroke:#16a34a,color:#14532d
+    classDef track fill:#f0fdfa,stroke:#0d9488,color:#134e4a
+    class A,AD,B,BD,C,CD collect
+    class D,DD,E,ED review
+    class F,FD verify
+    class G,GD export
+    class H,HD track
+    classDef detail font-size:17px
+    class AD,BD,CD,DD,ED,FD,GD,HD detail
+    style ORCH fill:none
+    style WORKFLOW fill:none
+    style AD stroke-dasharray:4 4
+    style BD stroke-dasharray:4 4
+    style CD stroke-dasharray:4 4
+    style DD stroke-dasharray:4 4
+    style ED stroke-dasharray:4 4
+    style FD stroke-dasharray:4 4
+    style GD stroke-dasharray:4 4
+    style HD stroke-dasharray:4 4
+    style S1 fill:none,stroke:none
+    style S2 fill:none,stroke:none
+    style S3 fill:none,stroke:none
+    style S4 fill:none,stroke:none
+    style S5 fill:none,stroke:none
+    style S6 fill:none,stroke:none
+    style S7 fill:none,stroke:none
 ```
 
-#### Vulnerability and Quality
+**Supported ecosystems:** JavaScript (npm, Yarn), Python (pip/PyPI, Poetry), and .NET (NuGet). Resolution verification supports npm, standalone Yarn Classic, Python requirements/PEP 621, and inline NuGet project references; see [verification limits](security-remediation-agent/src/engines/remediation_verification/README.md#limits).
 
-```mermaid
-flowchart LR
-  trigger["Triggered or Scheduled
-  Run"]
+Solid arrows show execution order; dotted connectors attach agent responsibilities. Each numbered stage maps to an agent coordinated by `SecurityOrchestrator`. With no findings, the orchestrator exports an empty plan after artifact collection. Verification can be disabled. GitHub Actions uses the exported plan to prepare tracking issues and a workflow summary; issue creation requires work and a non-dry run. See the [agent architecture](security-remediation-agent/README.md#architecture) for implementation details.
 
-  quality["Code Quality
-  Scans"]
+## Documentation
 
-  security["Security
-  Scans"]
+- [Security Remediation Agent](security-remediation-agent/README.md): architecture diagram, workflow explanation, setup, usage, output formats, and tests.
+- [Agents and tools](security-remediation-agent/AGENTS_AND_TOOLS.md): agent responsibilities, resolvers, reviewers, and commands.
+- [Remediation verification](security-remediation-agent/src/engines/remediation_verification/README.md): supported engines, candidate requirements, and verification limits.
 
-  vulnerability["Vulnerability
-  Scans"]
+## Repository contents
 
-  report["Generate SARIF
-  Reports"]
+| Location | Purpose |
+| --- | --- |
+| [security-remediation-agent/](security-remediation-agent/) | Python remediation pipeline and tests |
+| [Remediation workflow](.github/workflows/security-vulnerability-remediation.yml) | GitHub Actions integration |
+| [Workflow scripts](.github/scripts/security-remediation/) | Orchestrator invocation, output preparation, tracking issues, and summaries |
+| [templates/](templates/) | CI, CD, and scanning templates |
+| [examples/](examples/) | Example project files |
 
-  publish["Publish to Repository
-  Advanced Security"]
+## Get started
 
-  trigger --> quality
-  trigger --> security
-  trigger --> vulnerability
-
-  quality --> report
-  security --> report
-  vulnerability --> report
-
-  report --> publish
-```
-
-#### Remediation - Current State
-
-```mermaid
-flowchart LR
-  trigger["Triggered or Scheduled
-  Run"]
-
-  scan["Deterministically
-  Review Open GitHub Advanced Security Reports"]
-
-  plan["Deterministically
-  Plan the remediation"]
-
-  issues["Open Remediation Issues
-
-  Issues are grouped by severity
-  (Low, Medium, High, Critical)
-  and detail the remediation plan
-  separating breaking
-  and non-breaking changes"]
-
-  pr-non-breaking["Open Draft PR
-  for All non-Breaking Changes
-
-  Linked from the related issue
-  containing the instructions required
-  for an agent or human to implement."]
-
-  pr-breaking["Open Draft PR
-  for All Breaking Changes
-
-  Linked from the related issue
-  containing the instructions required
-  for an agent or human to implement."]
-
-  trigger --> scan
-  scan --> plan
-
-  plan --> issues
-
-  issues --> pr-non-breaking
-  issues --> pr-breaking
-```
-
-#### Remediation - Future State
-
-```mermaid
-flowchart LR
-  trigger["Triggered or Scheduled
-  Run"]
-
-  scan["Deterministically
-  Review Open GitHub Advanced Security Reports"]
-
-  plan["Deterministically
-  Plan the remediation"]
-
-  issues["Open Remediation Issues
-
-  Issues are grouped by severity
-  (Low, Medium, High, Critical)
-  and detail the remediation plan
-  separating breaking
-  and non-breaking changes"]
-
-  implement["Deterministically
-  Implement the Plan"]
-
-  pr-non-breaking["Open PR
-  for All non-Breaking Changes
-
-  Implemented and ready for review."]
-
-  pr-breaking["Open PR
-  for All Breaking Changes
-
-  Implemented and ready for review."]
-
-  trigger --> scan
-  scan --> plan
-
-  plan --> issues
-
-  issues --> implement
-
-  implement --> pr-non-breaking
-  implement --> pr-breaking
-```
-
-## Design Documentation
-
-- [Security Remediation Agent Design](./docs/workflows/security-remediation-agent-design.md)
-
-## Workflow Details
-
-- [GitHub Actions workflows](./docs/workflows/osv-scanner.md)
-- [Dependency Graph Refresh Workflow](./docs/workflows/dependency-graph-refresh.md)
+Follow the [agent setup and run instructions](security-remediation-agent/README.md#run-locally). The CLI writes `remediation-plan.json` and `renovate.json5` in the current working directory and prints the returned plan as JSON.
 
 ## Contributing
 
-This project is intended to be an open community project, where contributions are encouraged and welcome.
-
-Please feel free to contribute.  Don't be shy.
-- Make a fork, make a change, add a new feature, submit a PR.  This is the best way to make the project better.
-- Open an issue - Report a bug, suggest a new feature, provide feedback.
+Open an issue to report a bug or propose a change. Submit a pull request with relevant validation; test commands are listed in the [agent README](security-remediation-agent/README.md#tests).
